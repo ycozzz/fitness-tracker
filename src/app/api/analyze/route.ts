@@ -18,24 +18,83 @@ export async function POST(req: NextRequest) {
     const filepath = path.join(process.cwd(), 'uploads', filename);
     await writeFile(filepath, buffer);
 
-    // Mock AI analysis (replace with real AI API)
-    // In production, use Google Gemini Vision or OpenAI GPT-4 Vision
-    const mockAnalysis = {
-      foodName: '雞胸肉配糙米飯',
-      calories: 450,
-      protein: 35,
-      carbs: 52,
-      fat: 8,
-      fiber: 4,
-      sugar: 2,
-      sodium: 320,
-      servingSize: '1 份 (約 300g)',
-      confidence: 0.85,
-      imagePath: `/uploads/${filename}`
-    };
+    // Convert to base64 for API
+    const base64Image = buffer.toString('base64');
+    const mimeType = file.type || 'image/jpeg';
 
-    return NextResponse.json(mockAnalysis);
+    // Call OpenClaw API (Anthropic Claude with vision)
+    const apiResponse = await fetch('https://aicanapi.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': 'sk-YzDCyWnsuYqG0yoRLQPGxDKKi2BPSSxJs3N8YbTlK0pNh5iE',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mimeType,
+                data: base64Image
+              }
+            },
+            {
+              type: 'text',
+              text: `請分析這張食物圖片，以 JSON 格式回覆（只回覆 JSON，不要其他文字）：
+{
+  "foodName": "食物名稱（繁體中文）",
+  "calories": 卡路里數字,
+  "protein": 蛋白質克數,
+  "carbs": 碳水化合物克數,
+  "fat": 脂肪克數,
+  "fiber": 纖維克數,
+  "sugar": 糖分克數,
+  "sodium": 鈉毫克數,
+  "servingSize": "份量描述",
+  "confidence": 信心度0-1
+}
+
+請根據圖片中的食物估算營養成分。如果是多種食物，請合計總營養。`
+            }
+          ]
+        }]
+      })
+    });
+
+    if (!apiResponse.ok) {
+      throw new Error(`API error: ${apiResponse.status}`);
+    }
+
+    const apiData = await apiResponse.json();
+    const aiText = apiData.content[0].text;
+    
+    // Extract JSON from response
+    const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Failed to parse AI response');
+    }
+
+    const analysis = JSON.parse(jsonMatch[0]);
+    analysis.imagePath = `/uploads/${filename}`;
+
+    return NextResponse.json(analysis);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Analysis error:', error);
+    return NextResponse.json({ 
+      error: error.message,
+      // Fallback mock data
+      foodName: '未能識別',
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      confidence: 0
+    }, { status: 500 });
   }
 }
