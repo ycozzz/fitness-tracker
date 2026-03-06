@@ -3,12 +3,23 @@ import { useState, useRef, useEffect } from 'react';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
+interface MealTypeConfig {
+  type: MealType;
+  label: string;
+  icon: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+}
+
 export default function Home() {
   const [selectedMeal, setSelectedMeal] = useState<MealType>('breakfast');
+  const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [preview, setPreview] = useState<string>('');
   const [todayStats, setTodayStats] = useState({ consumed: 0, target: 2000, remaining: 2000 });
+  const [error, setError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,13 +29,15 @@ export default function Home() {
   const fetchTodayStats = async () => {
     try {
       const res = await fetch('/api/meals');
-      const meals = await res.json();
-      const consumed = meals.reduce((sum: number, m: any) => sum + (m.calories || 0), 0);
-      setTodayStats({
-        consumed: Math.round(consumed),
-        target: 2000,
-        remaining: Math.max(0, 2000 - consumed)
-      });
+      if (res.ok) {
+        const meals = await res.json();
+        const consumed = meals.reduce((sum: number, m: any) => sum + (m.calories || 0), 0);
+        setTodayStats({
+          consumed: Math.round(consumed),
+          target: 2000,
+          remaining: Math.max(0, 2000 - consumed)
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch stats');
     }
@@ -34,13 +47,28 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('請選擇圖片檔案');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('圖片大小不能超過 10MB');
+      return;
+    }
+
+    setError('');
+    setResult(null);
+
+    // Show preview
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
 
-    setAnalyzing(true);
-    setResult(null);
-    
+    // Upload and analyze
+    setUploading(true);
     const formData = new FormData();
     formData.append('image', file);
 
@@ -49,13 +77,26 @@ export default function Home() {
         method: 'POST',
         body: formData,
       });
+
+      setUploading(false);
+
+      if (!res.ok) {
+        throw new Error('上傳失敗');
+      }
+
+      setAnalyzing(true);
       const data = await res.json();
-      setResult(data);
-    } catch (err) {
-      alert('❌ 分析失敗，請重試');
-      setPreview('');
-    } finally {
+      
+      setTimeout(() => {
+        setAnalyzing(false);
+        setResult(data);
+      }, 1500); // Simulate AI processing time
+
+    } catch (err: any) {
+      setUploading(false);
       setAnalyzing(false);
+      setError(err.message || '分析失敗，請重試');
+      setPreview('');
     }
   };
 
@@ -67,240 +108,277 @@ export default function Home() {
       ...result,
     };
 
-    const res = await fetch('/api/meals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mealData),
-    });
+    try {
+      const res = await fetch('/api/meals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mealData),
+      });
 
-    if (res.ok) {
-      alert('✅ 已記錄！');
-      setResult(null);
-      setPreview('');
-      fetchTodayStats();
+      if (res.ok) {
+        setResult(null);
+        setPreview('');
+        fetchTodayStats();
+        
+        // Show success message
+        const successDiv = document.createElement('div');
+        successDiv.className = 'fixed top-4 right-4 bg-success-500 text-white px-6 py-3 rounded-xl shadow-lg animate-slide-up z-50';
+        successDiv.textContent = '✅ 已成功記錄！';
+        document.body.appendChild(successDiv);
+        setTimeout(() => successDiv.remove(), 3000);
+      }
+    } catch (err) {
+      setError('儲存失敗，請重試');
     }
   };
 
-  const mealTypes = [
-    { type: 'breakfast', label: '早餐', icon: '🌅', gradient: 'from-orange-400 to-pink-500' },
-    { type: 'lunch', label: '午餐', icon: '☀️', gradient: 'from-yellow-400 to-orange-500' },
-    { type: 'dinner', label: '晚餐', icon: '🌙', gradient: 'from-indigo-500 to-purple-600' },
-    { type: 'snack', label: '小食', icon: '🍎', gradient: 'from-green-400 to-teal-500' },
+  const mealTypes: MealTypeConfig[] = [
+    { type: 'breakfast', label: '早餐', icon: '🌅', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+    { type: 'lunch', label: '午餐', icon: '☀️', color: 'text-yellow-600', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
+    { type: 'dinner', label: '晚餐', icon: '🌙', color: 'text-indigo-600', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
+    { type: 'snack', label: '小食', icon: '🍎', color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
   ];
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 pb-24">
-      {/* Animated background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000" />
-        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
-      </div>
+  const selectedConfig = mealTypes.find(m => m.type === selectedMeal)!;
+  const progressPercent = Math.min(100, (todayStats.consumed / todayStats.target) * 100);
 
-      <div className="max-w-2xl mx-auto relative z-10">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 p-4 pb-24">
+      <div className="max-w-4xl mx-auto">
+        
         {/* Header */}
-        <div className="backdrop-blur-xl bg-white/10 rounded-3xl shadow-2xl p-6 mb-6 border border-white/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">
-                🏋️ Fitness Tracker
-              </h1>
-              <p className="text-white/80 text-sm">AI 智能飲食記錄</p>
+        <header className="mb-8 animate-fade-in">
+          <div className="card p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">
+                  🏋️ Fitness Tracker
+                </h1>
+                <p className="text-gray-500 text-sm">AI 智能飲食記錄</p>
+              </div>
+              <div className="text-right">
+                <div className="text-4xl font-bold bg-gradient-to-r from-primary-500 to-primary-600 bg-clip-text text-transparent">
+                  {todayStats.consumed}
+                </div>
+                <div className="text-gray-500 text-xs mt-1">今日卡路里</div>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-white drop-shadow-lg">{todayStats.consumed}</div>
-              <div className="text-white/60 text-xs">今日卡路里</div>
+
+            {/* Progress Bar */}
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-gray-600 mb-2">
+                <span>進度</span>
+                <span>{progressPercent.toFixed(0)}%</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-primary-500 to-primary-600 transition-all duration-500 rounded-full"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Meal Type Selector */}
-        <div className="backdrop-blur-xl bg-white/10 rounded-3xl shadow-2xl p-6 mb-6 border border-white/20">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
-            <span className="mr-2">🍽️</span> 選擇餐別
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            {mealTypes.map((meal) => (
-              <button
-                key={meal.type}
-                onClick={() => setSelectedMeal(meal.type as MealType)}
-                className={`relative p-6 rounded-2xl transition-all duration-300 transform ${
-                  selectedMeal === meal.type
-                    ? 'scale-105 shadow-2xl'
-                    : 'scale-100 hover:scale-102 shadow-lg'
-                }`}
-                style={{
-                  background: selectedMeal === meal.type 
-                    ? `linear-gradient(135deg, var(--tw-gradient-stops))`
-                    : 'rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(10px)'
-                }}
-              >
-                <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${meal.gradient} ${
-                  selectedMeal === meal.type ? 'opacity-100' : 'opacity-0'
-                } transition-opacity duration-300`} />
-                <div className="relative z-10">
-                  <div className="text-4xl mb-2">{meal.icon}</div>
-                  <div className={`text-base font-bold ${
-                    selectedMeal === meal.type ? 'text-white' : 'text-white/80'
-                  }`}>{meal.label}</div>
-                </div>
-              </button>
-            ))}
+        <section className="mb-6 animate-slide-up">
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <span className="mr-2">🍽️</span> 選擇餐別
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {mealTypes.map((meal) => (
+                <button
+                  key={meal.type}
+                  onClick={() => setSelectedMeal(meal.type)}
+                  className={`relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                    selectedMeal === meal.type
+                      ? `${meal.bgColor} ${meal.borderColor} shadow-md scale-105`
+                      : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                  }`}
+                >
+                  <div className="text-3xl mb-2">{meal.icon}</div>
+                  <div className={`text-sm font-semibold ${selectedMeal === meal.type ? meal.color : 'text-gray-700'}`}>
+                    {meal.label}
+                  </div>
+                  {selectedMeal === meal.type && (
+                    <div className="absolute top-2 right-2">
+                      <div className={`w-2 h-2 rounded-full ${meal.color.replace('text-', 'bg-')}`} />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Camera / Upload */}
-        <div className="backdrop-blur-xl bg-white/10 rounded-3xl shadow-2xl p-6 mb-6 border border-white/20">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleImageSelect}
-            className="hidden"
-          />
-          
-          {!preview ? (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full py-20 border-4 border-dashed border-white/30 rounded-3xl hover:border-white/60 hover:bg-white/5 transition-all duration-300 group relative overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <div className="relative z-10">
-                <div className="text-7xl mb-4 group-hover:scale-110 transition-transform duration-300">📸</div>
-                <div className="text-xl font-bold text-white mb-2">拍照或上傳食物圖片</div>
-                <div className="text-sm text-white/60">AI 會自動識別並計算營養</div>
+        {/* Upload Area */}
+        <section className="mb-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <div className="card p-6">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            
+            {!preview ? (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <span className="mr-2">📸</span> 拍照或上傳
+                </h2>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="upload-area w-full py-16 flex flex-col items-center justify-center group"
+                >
+                  <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                    📷
+                  </div>
+                  <div className="text-lg font-semibold text-gray-700 mb-2">
+                    點擊上傳食物照片
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    支援 JPG、PNG 格式，最大 10MB
+                  </div>
+                </button>
               </div>
-            </button>
-          ) : (
-            <div className="space-y-4">
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-                <img src={preview} alt="Food" className="w-full" />
-                {analyzing && (
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="w-20 h-20 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
-                      <p className="text-white font-semibold text-lg">AI 分析中...</p>
-                      <p className="text-white/60 text-sm mt-2">請稍候</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="relative rounded-xl overflow-hidden shadow-md">
+                  <img src={preview} alt="Food" className="w-full" />
+                  
+                  {/* Uploading Overlay */}
+                  {uploading && (
+                    <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="spinner mx-auto mb-4 text-primary-500" />
+                        <p className="text-gray-700 font-semibold">上傳中...</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Analyzing Overlay */}
+                  {analyzing && !uploading && (
+                    <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="spinner mx-auto mb-4 text-primary-500" />
+                        <p className="text-gray-700 font-semibold text-lg">AI 分析中...</p>
+                        <p className="text-gray-500 text-sm mt-2">正在識別食物並計算營養</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Analysis Result */}
+                {result && !analyzing && !uploading && (
+                  <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-6 border-2 border-gray-100 shadow-sm animate-fade-in">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                          {result.foodName}
+                        </h3>
+                        {result.confidence && (
+                          <div className="badge badge-success">
+                            信心度 {Math.round(result.confidence * 100)}%
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Nutrition Grid */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="stat-card from-green-50 to-emerald-50 border-green-100">
+                        <div className="text-sm text-green-700 font-medium mb-1">卡路里</div>
+                        <div className="text-3xl font-bold text-green-600">{result.calories}</div>
+                        <div className="text-xs text-green-600 mt-1">kcal</div>
+                      </div>
+                      <div className="stat-card from-blue-50 to-cyan-50 border-blue-100">
+                        <div className="text-sm text-blue-700 font-medium mb-1">蛋白質</div>
+                        <div className="text-3xl font-bold text-blue-600">{result.protein}</div>
+                        <div className="text-xs text-blue-600 mt-1">g</div>
+                      </div>
+                      <div className="stat-card from-orange-50 to-amber-50 border-orange-100">
+                        <div className="text-sm text-orange-700 font-medium mb-1">碳水</div>
+                        <div className="text-3xl font-bold text-orange-600">{result.carbs}</div>
+                        <div className="text-xs text-orange-600 mt-1">g</div>
+                      </div>
+                      <div className="stat-card from-yellow-50 to-amber-50 border-yellow-100">
+                        <div className="text-sm text-yellow-700 font-medium mb-1">脂肪</div>
+                        <div className="text-3xl font-bold text-yellow-600">{result.fat}</div>
+                        <div className="text-xs text-yellow-600 mt-1">g</div>
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-gray-600 mb-4 flex items-center">
+                      <span className="mr-2">📏</span>
+                      <span>份量：{result.servingSize}</span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={saveMeal}
+                        className="flex-1 btn btn-success"
+                      >
+                        ✅ 儲存記錄
+                      </button>
+                      <button
+                        onClick={() => { setResult(null); setPreview(''); setError(''); }}
+                        className="px-6 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-95"
+                      >
+                        🔄 重拍
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                  <div className="bg-danger-50 border-2 border-danger-500 rounded-xl p-4 flex items-center animate-fade-in">
+                    <span className="text-2xl mr-3">⚠️</span>
+                    <div>
+                      <div className="font-semibold text-danger-500">錯誤</div>
+                      <div className="text-sm text-danger-600">{error}</div>
                     </div>
                   </div>
                 )}
               </div>
-              
-              {result && !analyzing && (
-                <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 rounded-2xl p-6 border border-white/30 shadow-2xl">
-                  <h3 className="text-2xl font-bold text-white mb-4 flex items-center">
-                    <span className="mr-2">🍴</span> {result.foodName}
-                  </h3>
-                  
-                  {result.confidence && (
-                    <div className="mb-4 text-white/70 text-sm">
-                      信心度: {Math.round(result.confidence * 100)}%
-                    </div>
-                  )}
-                  
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/30 to-emerald-500/30 rounded-xl p-4 text-center border border-white/20">
-                      <div className="text-3xl font-bold text-white drop-shadow-lg">{result.calories}</div>
-                      <div className="text-white/80 text-sm font-medium">卡路里</div>
-                    </div>
-                    <div className="backdrop-blur-xl bg-gradient-to-br from-blue-500/30 to-cyan-500/30 rounded-xl p-4 text-center border border-white/20">
-                      <div className="text-3xl font-bold text-white drop-shadow-lg">{result.protein}g</div>
-                      <div className="text-white/80 text-sm font-medium">蛋白質</div>
-                    </div>
-                    <div className="backdrop-blur-xl bg-gradient-to-br from-orange-500/30 to-amber-500/30 rounded-xl p-4 text-center border border-white/20">
-                      <div className="text-3xl font-bold text-white drop-shadow-lg">{result.carbs}g</div>
-                      <div className="text-white/80 text-sm font-medium">碳水</div>
-                    </div>
-                    <div className="backdrop-blur-xl bg-gradient-to-br from-yellow-500/30 to-orange-500/30 rounded-xl p-4 text-center border border-white/20">
-                      <div className="text-3xl font-bold text-white drop-shadow-lg">{result.fat}g</div>
-                      <div className="text-white/80 text-sm font-medium">脂肪</div>
-                    </div>
-                  </div>
-
-                  <div className="text-sm text-white/70 mb-4 text-center">
-                    📏 份量：{result.servingSize}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={saveMeal}
-                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl hover:shadow-2xl hover:scale-105 transition-all duration-300"
-                    >
-                      ✅ 儲存記錄
-                    </button>
-                    <button
-                      onClick={() => { setResult(null); setPreview(''); }}
-                      className="px-6 backdrop-blur-xl bg-white/20 text-white font-bold py-4 rounded-xl hover:bg-white/30 transition-all duration-300 border border-white/30"
-                    >
-                      🔄 重拍
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </section>
 
         {/* Today Stats */}
-        <div className="backdrop-blur-xl bg-white/10 rounded-3xl shadow-2xl p-6 border border-white/20">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
-            <span className="mr-2">📊</span> 今日統計
-          </h2>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/30 to-emerald-500/30 rounded-2xl p-4 border border-white/20">
-                <div className="text-3xl font-bold text-white drop-shadow-lg">{todayStats.consumed}</div>
-                <div className="text-xs text-white/70 mt-1">已攝取</div>
+        <section className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <span className="mr-2">📊</span> 今日統計
+            </h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="stat-card from-green-50 to-emerald-50 border-green-100">
+                  <div className="text-3xl font-bold text-green-600">{todayStats.consumed}</div>
+                  <div className="text-xs text-green-700 mt-2 font-medium">已攝取</div>
+                </div>
               </div>
-            </div>
-            <div className="text-center">
-              <div className="backdrop-blur-xl bg-gradient-to-br from-blue-500/30 to-cyan-500/30 rounded-2xl p-4 border border-white/20">
-                <div className="text-3xl font-bold text-white drop-shadow-lg">{todayStats.target}</div>
-                <div className="text-xs text-white/70 mt-1">目標</div>
+              <div className="text-center">
+                <div className="stat-card from-blue-50 to-cyan-50 border-blue-100">
+                  <div className="text-3xl font-bold text-blue-600">{todayStats.target}</div>
+                  <div className="text-xs text-blue-700 mt-2 font-medium">目標</div>
+                </div>
               </div>
-            </div>
-            <div className="text-center">
-              <div className="backdrop-blur-xl bg-gradient-to-br from-orange-500/30 to-amber-500/30 rounded-2xl p-4 border border-white/20">
-                <div className="text-3xl font-bold text-white drop-shadow-lg">{todayStats.remaining}</div>
-                <div className="text-xs text-white/70 mt-1">剩餘</div>
+              <div className="text-center">
+                <div className="stat-card from-orange-50 to-amber-50 border-orange-100">
+                  <div className="text-3xl font-bold text-orange-600">{todayStats.remaining}</div>
+                  <div className="text-xs text-orange-700 mt-2 font-medium">剩餘</div>
+                </div>
               </div>
             </div>
           </div>
-          
-          {/* Progress bar */}
-          <div className="mt-4">
-            <div className="h-3 bg-white/10 rounded-full overflow-hidden backdrop-blur-xl border border-white/20">
-              <div 
-                className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500 rounded-full"
-                style={{ width: `${Math.min(100, (todayStats.consumed / todayStats.target) * 100)}%` }}
-              />
-            </div>
-            <div className="text-center text-white/60 text-xs mt-2">
-              {Math.round((todayStats.consumed / todayStats.target) * 100)}% 完成
-            </div>
-          </div>
-        </div>
-      </div>
+        </section>
 
-      <style jsx global>{`
-        @keyframes blob {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          25% { transform: translate(20px, -50px) scale(1.1); }
-          50% { transform: translate(-20px, 20px) scale(0.9); }
-          75% { transform: translate(50px, 50px) scale(1.05); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
+      </div>
     </div>
   );
 }
