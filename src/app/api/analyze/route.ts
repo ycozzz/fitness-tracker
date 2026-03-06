@@ -22,31 +22,32 @@ export async function POST(req: NextRequest) {
     const base64Image = buffer.toString('base64');
     const mimeType = file.type || 'image/jpeg';
 
-    // Call OpenClaw API (Anthropic Claude with vision)
-    const apiResponse = await fetch('https://aicanapi.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': 'sk-YzDCyWnsuYqG0yoRLQPGxDKKi2BPSSxJs3N8YbTlK0pNh5iE',
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType,
-                data: base64Image
-              }
-            },
-            {
-              type: 'text',
-              text: `請分析這張食物圖片，以 JSON 格式回覆（只回覆 JSON，不要其他文字）：
+    try {
+      // Call OpenClaw API (Anthropic Claude with vision)
+      const apiResponse = await fetch('https://aicanapi.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'sk-YzDCyWnsuYqG0yoRLQPGxDKKi2BPSSxJs3N8YbTlK0pNh5iE',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mimeType,
+                  data: base64Image
+                }
+              },
+              {
+                type: 'text',
+                text: `請分析這張食物圖片，以 JSON 格式回覆（只回覆 JSON，不要其他文字）：
 {
   "foodName": "食物名稱（繁體中文）",
   "calories": 卡路里數字,
@@ -61,40 +62,51 @@ export async function POST(req: NextRequest) {
 }
 
 請根據圖片中的食物估算營養成分。如果是多種食物，請合計總營養。`
-            }
-          ]
-        }]
-      })
-    });
+              }
+            ]
+          }]
+        })
+      });
 
-    if (!apiResponse.ok) {
-      throw new Error(`API error: ${apiResponse.status}`);
+      if (apiResponse.ok) {
+        const apiData = await apiResponse.json();
+        const aiText = apiData.content[0].text;
+        
+        // Extract JSON from response
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const analysis = JSON.parse(jsonMatch[0]);
+          analysis.imagePath = `/uploads/${filename}`;
+          return NextResponse.json(analysis);
+        }
+      }
+    } catch (apiError) {
+      console.error('AI API failed, using mock data:', apiError);
     }
 
-    const apiData = await apiResponse.json();
-    const aiText = apiData.content[0].text;
-    
-    // Extract JSON from response
-    const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response');
-    }
+    // Fallback: Return mock data when API fails
+    const mockData = {
+      foodName: '食物分析中...',
+      calories: 350,
+      protein: 15,
+      carbs: 45,
+      fat: 12,
+      fiber: 5,
+      sugar: 8,
+      sodium: 400,
+      servingSize: '1 份',
+      confidence: 0.7,
+      imagePath: `/uploads/${filename}`,
+      note: '⚠️ AI 服務暫時不可用，顯示模擬數據'
+    };
 
-    const analysis = JSON.parse(jsonMatch[0]);
-    analysis.imagePath = `/uploads/${filename}`;
+    return NextResponse.json(mockData);
 
-    return NextResponse.json(analysis);
   } catch (error: any) {
     console.error('Analysis error:', error);
     return NextResponse.json({ 
-      error: error.message,
-      // Fallback mock data
-      foodName: '未能識別',
-      calories: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-      confidence: 0
+      error: '上傳失敗，請重試',
+      details: error.message
     }, { status: 500 });
   }
 }

@@ -96,7 +96,6 @@ export default function Home() {
       setUploading(false);
       setAnalyzing(false);
       setError(err.message || '分析失敗，請重試');
-      setPreview('');
     }
   };
 
@@ -219,7 +218,6 @@ export default function Home() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={handleImageSelect}
               className="hidden"
             />
