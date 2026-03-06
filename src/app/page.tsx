@@ -282,6 +282,11 @@ export default function Home() {
                             信心度 {Math.round(result.confidence * 100)}%
                           </div>
                         )}
+                        {result.note && (
+                          <div className="mt-2 text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
+                            {result.note}
+                          </div>
+                        )}
                       </div>
                     </div>
                     
