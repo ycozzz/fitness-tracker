@@ -49,11 +49,13 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('請選擇圖片檔案');
       return;
     }
 
+    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('圖片大小不能超過 10MB');
       return;
@@ -62,10 +64,12 @@ export default function Home() {
     setError('');
     setResult(null);
 
+    // Show preview
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
 
+    // Upload and analyze
     setUploading(true);
     const formData = new FormData();
     formData.append('image', file);
@@ -88,7 +92,7 @@ export default function Home() {
       setTimeout(() => {
         setAnalyzing(false);
         setResult(data);
-      }, 1500);
+      }, 1500); // Simulate AI processing time
 
     } catch (err: any) {
       setUploading(false);
@@ -96,6 +100,7 @@ export default function Home() {
       setError(err.message || '分析失敗，請重試');
     }
   };
+
 
   const startEdit = () => {
     setEditedResult({ ...result });
@@ -127,9 +132,9 @@ export default function Home() {
       protein: Math.round(prev.protein * multiplier),
       carbs: Math.round(prev.carbs * multiplier),
       fat: Math.round(prev.fat * multiplier),
-      fiber: Math.round((prev.fiber || 0) * multiplier),
-      sugar: Math.round((prev.sugar || 0) * multiplier),
-      sodium: Math.round((prev.sodium || 0) * multiplier)
+      fiber: Math.round(prev.fiber * multiplier),
+      sugar: Math.round(prev.sugar * multiplier),
+      sodium: Math.round(prev.sodium * multiplier)
     }));
   };
 
@@ -152,6 +157,13 @@ export default function Home() {
         setResult(null);
         setPreview('');
         fetchTodayStats();
+        
+        // Show success message
+        const successDiv = document.createElement('div');
+        successDiv.className = 'fixed top-4 right-4 bg-success-500 text-white px-6 py-3 rounded-xl shadow-lg animate-slide-up z-50';
+        successDiv.textContent = '✅ 已成功記錄！';
+        document.body.appendChild(successDiv);
+        setTimeout(() => successDiv.remove(), 3000);
       }
     } catch (err) {
       setError('儲存失敗，請重試');
@@ -168,8 +180,6 @@ export default function Home() {
   const selectedConfig = mealTypes.find(m => m.type === selectedMeal)!;
   const progressPercent = Math.min(100, (todayStats.consumed / todayStats.target) * 100);
 
-  const displayData = editing ? editedResult : result;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 p-4 pb-24">
       <div className="max-w-4xl mx-auto">
@@ -179,7 +189,9 @@ export default function Home() {
           <div className="card p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-1">🏋️ Fitness Tracker</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">
+                  🏋️ Fitness Tracker
+                </h1>
                 <p className="text-gray-500 text-sm">AI 智能飲食記錄</p>
               </div>
               <div className="text-right">
@@ -189,10 +201,12 @@ export default function Home() {
                 <div className="text-gray-500 text-xs mt-1">今日卡路里</div>
               </div>
             </div>
+
+            {/* Progress Bar */}
             <div className="mt-4">
               <div className="flex justify-between text-xs text-gray-600 mb-2">
                 <span>進度</span>
-                <span>{Math.round(progressPercent)}%</span>
+                <span>{progressPercent.toFixed(0)}%</span>
               </div>
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div 
@@ -272,6 +286,7 @@ export default function Home() {
                 <div className="relative rounded-xl overflow-hidden shadow-md">
                   <img src={preview} alt="Food" className="w-full" />
                   
+                  {/* Uploading Overlay */}
                   {uploading && (
                     <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
                       <div className="text-center">
@@ -281,6 +296,7 @@ export default function Home() {
                     </div>
                   )}
 
+                  {/* Analyzing Overlay */}
                   {analyzing && !uploading && (
                     <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
                       <div className="text-center">
@@ -291,216 +307,71 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-
+                
                 {/* Analysis Result */}
-                {displayData && !analyzing && !uploading && (
+                {result && !analyzing && !uploading && (
                   <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-6 border-2 border-gray-100 shadow-sm animate-fade-in">
                     <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
+                      <div>
                         <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                          {displayData.foodName}
+                          {result.foodName}
                         </h3>
-                        {displayData.confidence && (
+                        {result.confidence && (
                           <div className="badge badge-success">
-                            信心度 {Math.round(displayData.confidence * 100)}%
+                            信心度 {Math.round(result.confidence * 100)}%
                           </div>
                         )}
-                        {displayData.note && (
+                        {result.note && (
                           <div className="mt-2 text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
-                            {displayData.note}
+                            {result.note}
                           </div>
                         )}
                       </div>
-                      
-                      {/* Edit Button */}
-                      {!editing && (
-                        <button
-                          onClick={startEdit}
-                          className="ml-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
-                        >
-                          <span>✏️</span>
-                          <span>編輯</span>
-                        </button>
-                      )}
                     </div>
-
-                    {/* Serving Size Adjuster (Editing Mode) */}
-                    {editing && (
-                      <div className="mb-4 p-4 bg-blue-50 rounded-xl border-2 border-blue-200">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-3">調整份量</h4>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => adjustServing(0.5)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            ½ 份
-                          </button>
-                          <button
-                            onClick={() => adjustServing(0.75)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            ¾ 份
-                          </button>
-                          <button
-                            onClick={() => adjustServing(1.5)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            1.5 份
-                          </button>
-                          <button
-                            onClick={() => adjustServing(2)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            2 份
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     
                     {/* Nutrition Grid */}
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div className="stat-card from-green-50 to-emerald-50 border-green-100">
                         <div className="text-sm text-green-700 font-medium mb-1">卡路里</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.calories}
-                            onChange={(e) => updateNutrition('calories', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-green-600 bg-transparent border-b-2 border-green-300 focus:outline-none focus:border-green-500"
-                          />
-                        ) : (
-                          <div className="text-3xl font-bold text-green-600">{displayData.calories}</div>
-                        )}
+                        <div className="text-3xl font-bold text-green-600">{result.calories}</div>
                         <div className="text-xs text-green-600 mt-1">kcal</div>
                       </div>
                       <div className="stat-card from-blue-50 to-cyan-50 border-blue-100">
                         <div className="text-sm text-blue-700 font-medium mb-1">蛋白質</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.protein}
-                            onChange={(e) => updateNutrition('protein', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:outline-none focus:border-blue-500"
-                          />
-                        ) : (
-                          <div className="text-3xl font-bold text-blue-600">{displayData.protein}</div>
-                        )}
+                        <div className="text-3xl font-bold text-blue-600">{result.protein}</div>
                         <div className="text-xs text-blue-600 mt-1">g</div>
                       </div>
                       <div className="stat-card from-orange-50 to-amber-50 border-orange-100">
                         <div className="text-sm text-orange-700 font-medium mb-1">碳水</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.carbs}
-                            onChange={(e) => updateNutrition('carbs', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-orange-600 bg-transparent border-b-2 border-orange-300 focus:outline-none focus:border-orange-500"
-                          />
-                        ) : (
-                          <div className="text-3xl font-bold text-orange-600">{displayData.carbs}</div>
-                        )}
+                        <div className="text-3xl font-bold text-orange-600">{result.carbs}</div>
                         <div className="text-xs text-orange-600 mt-1">g</div>
                       </div>
-                      <div className="stat-card from-red-50 to-rose-50 border-red-100">
-                        <div className="text-sm text-red-700 font-medium mb-1">脂肪</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.fat}
-                            onChange={(e) => updateNutrition('fat', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-red-600 bg-transparent border-b-2 border-red-300 focus:outline-none focus:border-red-500"
-                          />
-                        ) : (
-                          <div className="text-3xl font-bold text-red-600">{displayData.fat}</div>
-                        )}
-                        <div className="text-xs text-red-600 mt-1">g</div>
+                      <div className="stat-card from-yellow-50 to-amber-50 border-yellow-100">
+                        <div className="text-sm text-yellow-700 font-medium mb-1">脂肪</div>
+                        <div className="text-3xl font-bold text-yellow-600">{result.fat}</div>
+                        <div className="text-xs text-yellow-600 mt-1">g</div>
                       </div>
                     </div>
 
-                    {/* More Details */}
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
-                        <div className="text-xs text-purple-700 font-medium mb-1">纖維</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.fiber || 0}
-                            onChange={(e) => updateNutrition('fiber', parseInt(e.target.value) || 0)}
-                            className="w-full text-lg font-bold text-purple-600 bg-transparent border-b border-purple-300 focus:outline-none text-center"
-                          />
-                        ) : (
-                          <div className="text-lg font-bold text-purple-600">{displayData.fiber || 0}g</div>
-                        )}
-                      </div>
-                      <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-center">
-                        <div className="text-xs text-pink-700 font-medium mb-1">糖分</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.sugar || 0}
-                            onChange={(e) => updateNutrition('sugar', parseInt(e.target.value) || 0)}
-                            className="w-full text-lg font-bold text-pink-600 bg-transparent border-b border-pink-300 focus:outline-none text-center"
-                          />
-                        ) : (
-                          <div className="text-lg font-bold text-pink-600">{displayData.sugar || 0}g</div>
-                        )}
-                      </div>
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                        <div className="text-xs text-gray-700 font-medium mb-1">鈉</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.sodium || 0}
-                            onChange={(e) => updateNutrition('sodium', parseInt(e.target.value) || 0)}
-                            className="w-full text-lg font-bold text-gray-600 bg-transparent border-b border-gray-300 focus:outline-none text-center"
-                          />
-                        ) : (
-                          <div className="text-lg font-bold text-gray-600">{displayData.sodium || 0}mg</div>
-                        )}
-                      </div>
+                    <div className="text-sm text-gray-600 mb-4 flex items-center">
+                      <span className="mr-2">📏</span>
+                      <span>份量：{result.servingSize}</span>
                     </div>
-
-                    {/* Serving Size Info */}
-                    {displayData.servingSize && (
-                      <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                        <div className="text-xs text-gray-600 mb-1">份量</div>
-                        <div className="text-sm font-semibold text-gray-800">{displayData.servingSize}</div>
-                      </div>
-                    )}
 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
-                      {editing ? (
-                        <>
-                          <button
-                            onClick={saveEdit}
-                            className="flex-1 btn btn-success"
-                          >
-                            ✓ 確認修改
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="flex-1 px-6 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition-all"
-                          >
-                            ✗ 取消
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={saveMeal}
-                            className="flex-1 btn btn-success"
-                          >
-                            💾 儲存記錄
-                          </button>
-                          <button
-                            onClick={() => { setResult(null); setPreview(''); setError(''); }}
-                            className="px-6 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition-all"
-                          >
-                            🔄 重新上傳
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={saveMeal}
+                        className="flex-1 btn btn-success"
+                      >
+                        ✅ 儲存記錄
+                      </button>
+                      <button
+                        onClick={() => { setResult(null); setPreview(''); setError(''); }}
+                        className="px-6 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-95"
+                      >
+                        🔄 重拍
+                      </button>
                     </div>
                   </div>
                 )}
@@ -548,6 +419,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+
       </div>
     </div>
   );
