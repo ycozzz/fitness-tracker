@@ -23,26 +23,23 @@ export async function POST(req: NextRequest) {
     const mimeType = file.type || 'image/jpeg';
 
     try {
-      // Call OpenClaw API (Anthropic Claude with vision)
-      const apiResponse = await fetch('https://aicanapi.com/v1/messages', {
+      // Call OpenRouter API (Claude with vision)
+      const apiResponse = await fetch('https://openrouter.vip/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': 'sk-YzDCyWnsuYqG0yoRLQPGxDKKi2BPSSxJs3N8YbTlK0pNh5iE',
-          'anthropic-version': '2023-06-01'
+          'Authorization': 'Bearer sk-jWoK0t2XWevNZ8mvlgGQ7CLTsWREj73Vb4FbbPJdXDbSPR6v',
+          'User-Agent': 'Mozilla/5.0'
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1024,
+          model: 'claude-sonnet-4-5-20250929',
           messages: [{
             role: 'user',
             content: [
               {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mimeType,
-                  data: base64Image
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Image}`
                 }
               },
               {
@@ -64,27 +61,33 @@ export async function POST(req: NextRequest) {
 請根據圖片中的食物估算營養成分。如果是多種食物，請合計總營養。`
               }
             ]
-          }]
+          }],
+          max_tokens: 1024
         })
       });
 
       if (apiResponse.ok) {
         const apiData = await apiResponse.json();
-        const aiText = apiData.content[0].text;
+        const aiText = apiData.choices[0].message.content;
         
         // Extract JSON from response
         const jsonMatch = aiText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const analysis = JSON.parse(jsonMatch[0]);
           analysis.imagePath = `/uploads/${filename}`;
+          console.log('✅ AI Analysis successful:', analysis.foodName);
           return NextResponse.json(analysis);
         }
+      } else {
+        const errorText = await apiResponse.text();
+        console.error('API Error:', apiResponse.status, errorText);
       }
-    } catch (apiError) {
-      console.error('AI API failed, using mock data:', apiError);
+    } catch (apiError: any) {
+      console.error('AI API failed:', apiError.message);
     }
 
     // Fallback: Return mock data when API fails
+    console.log('⚠️ Using mock data fallback');
     const mockData = {
       foodName: '食物分析中...',
       calories: 350,
