@@ -45,8 +45,64 @@ export async function POST(req: NextRequest) {
               {
                 type: 'text',
                 text: `請分析這張食物圖片，以 JSON 格式回覆（只回覆 JSON，不要其他文字）：
+
+如果圖片中有多種食物，請用以下格式：
+{
+  "foodName": "食物1 + 食物2",
+  "items": [
+    {
+      "name": "食物1名稱（繁體中文）",
+      "calories": 卡路里數字,
+      "protein": 蛋白質克數,
+      "carbs": 碳水化合物克數,
+      "fat": 脂肪克數,
+      "fiber": 纖維克數,
+      "sugar": 糖分克數,
+      "sodium": 鈉毫克數,
+      "servingSize": "份量描述",
+      "quantity": 1
+    },
+    {
+      "name": "食物2名稱（繁體中文）",
+      "calories": 卡路里數字,
+      "protein": 蛋白質克數,
+      "carbs": 碳水化合物克數,
+      "fat": 脂肪克數,
+      "fiber": 纖維克數,
+      "sugar": 糖分克數,
+      "sodium": 鈉毫克數,
+      "servingSize": "份量描述",
+      "quantity": 1
+    }
+  ],
+  "calories": 總卡路里,
+  "protein": 總蛋白質,
+  "carbs": 總碳水,
+  "fat": 總脂肪,
+  "fiber": 總纖維,
+  "sugar": 總糖分,
+  "sodium": 總鈉,
+  "servingSize": "總份量描述",
+  "confidence": 信心度0-1
+}
+
+如果只有一種食物，請用以下格式：
 {
   "foodName": "食物名稱（繁體中文）",
+  "items": [
+    {
+      "name": "食物名稱（繁體中文）",
+      "calories": 卡路里數字,
+      "protein": 蛋白質克數,
+      "carbs": 碳水化合物克數,
+      "fat": 脂肪克數,
+      "fiber": 纖維克數,
+      "sugar": 糖分克數,
+      "sodium": 鈉毫克數,
+      "servingSize": "份量描述",
+      "quantity": 1
+    }
+  ],
   "calories": 卡路里數字,
   "protein": 蛋白質克數,
   "carbs": 碳水化合物克數,
@@ -58,11 +114,11 @@ export async function POST(req: NextRequest) {
   "confidence": 信心度0-1
 }
 
-請根據圖片中的食物估算營養成分。如果是多種食物，請合計總營養。`
+請根據圖片中的食物估算營養成分。`
               }
             ]
           }],
-          max_tokens: 1024
+          max_tokens: 2048
         })
       });
 
@@ -90,6 +146,20 @@ export async function POST(req: NextRequest) {
     console.log('⚠️ Using mock data fallback');
     const mockData = {
       foodName: '食物分析中...',
+      items: [
+        {
+          name: '食物分析中...',
+          calories: 350,
+          protein: 15,
+          carbs: 45,
+          fat: 12,
+          fiber: 5,
+          sugar: 8,
+          sodium: 400,
+          servingSize: '1 份',
+          quantity: 1
+        }
+      ],
       calories: 350,
       protein: 15,
       carbs: 45,

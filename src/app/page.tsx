@@ -3,6 +3,19 @@ import { useState, useRef, useEffect } from 'react';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
+interface FoodItem {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  servingSize: string;
+  quantity: number;
+}
+
 interface MealTypeConfig {
   type: MealType;
   label: string;
@@ -98,7 +111,7 @@ export default function Home() {
   };
 
   const startEdit = () => {
-    setEditedResult({ ...result });
+    setEditedResult(JSON.parse(JSON.stringify(result))); // Deep copy
     setEditing(true);
   };
 
@@ -108,29 +121,42 @@ export default function Home() {
   };
 
   const saveEdit = () => {
-    setResult(editedResult);
+    // Recalculate totals
+    const items = editedResult.items || [];
+    const totals = items.reduce((acc: any, item: FoodItem) => ({
+      calories: acc.calories + (item.calories * item.quantity),
+      protein: acc.protein + (item.protein * item.quantity),
+      carbs: acc.carbs + (item.carbs * item.quantity),
+      fat: acc.fat + (item.fat * item.quantity),
+      fiber: acc.fiber + (item.fiber * item.quantity),
+      sugar: acc.sugar + (item.sugar * item.quantity),
+      sodium: acc.sodium + (item.sodium * item.quantity)
+    }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 });
+
+    setResult({
+      ...editedResult,
+      ...totals,
+      calories: Math.round(totals.calories),
+      protein: Math.round(totals.protein),
+      carbs: Math.round(totals.carbs),
+      fat: Math.round(totals.fat),
+      fiber: Math.round(totals.fiber),
+      sugar: Math.round(totals.sugar),
+      sodium: Math.round(totals.sodium)
+    });
     setEditing(false);
     setEditedResult(null);
   };
 
-  const updateNutrition = (field: string, value: number) => {
-    setEditedResult((prev: any) => ({
-      ...prev,
-      [field]: value
-    }));
+  const updateItemQuantity = (index: number, quantity: number) => {
+    const newItems = [...editedResult.items];
+    newItems[index].quantity = Math.max(0, quantity);
+    setEditedResult({ ...editedResult, items: newItems });
   };
 
-  const adjustServing = (multiplier: number) => {
-    setEditedResult((prev: any) => ({
-      ...prev,
-      calories: Math.round(prev.calories * multiplier),
-      protein: Math.round(prev.protein * multiplier),
-      carbs: Math.round(prev.carbs * multiplier),
-      fat: Math.round(prev.fat * multiplier),
-      fiber: Math.round((prev.fiber || 0) * multiplier),
-      sugar: Math.round((prev.sugar || 0) * multiplier),
-      sodium: Math.round((prev.sodium || 0) * multiplier)
-    }));
+  const removeItem = (index: number) => {
+    const newItems = editedResult.items.filter((_: any, i: number) => i !== index);
+    setEditedResult({ ...editedResult, items: newItems });
   };
 
   const saveMeal = async () => {
@@ -324,96 +350,81 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Serving Size Adjuster (Editing Mode) */}
-                    {editing && (
-                      <div className="mb-4 p-4 bg-blue-50 rounded-xl border-2 border-blue-200">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-3">調整份量</h4>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => adjustServing(0.5)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            ½ 份
-                          </button>
-                          <button
-                            onClick={() => adjustServing(0.75)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            ¾ 份
-                          </button>
-                          <button
-                            onClick={() => adjustServing(1.5)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            1.5 份
-                          </button>
-                          <button
-                            onClick={() => adjustServing(2)}
-                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-semibold"
-                          >
-                            2 份
-                          </button>
-                        </div>
+                    {/* Food Items List (Editing Mode) */}
+                    {editing && displayData.items && displayData.items.length > 0 && (
+                      <div className="mb-4 space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">食物項目</h4>
+                        {displayData.items.map((item: FoodItem, index: number) => (
+                          <div key={index} className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-900">{item.name}</div>
+                                <div className="text-xs text-gray-600 mt-1">
+                                  {item.calories}kcal · {item.protein}g蛋白質 · {item.carbs}g碳水 · {item.fat}g脂肪
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeItem(index)}
+                                className="ml-3 px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm font-semibold"
+                              >
+                                ✕ 移除
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <label className="text-sm font-medium text-gray-700">數量:</label>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => updateItemQuantity(index, item.quantity - 0.5)}
+                                  className="w-8 h-8 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-bold"
+                                >
+                                  −
+                                </button>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={item.quantity}
+                                  onChange={(e) => updateItemQuantity(index, parseFloat(e.target.value) || 0)}
+                                  className="w-20 px-3 py-2 text-center border-2 border-blue-300 rounded-lg font-semibold text-blue-700 focus:outline-none focus:border-blue-500"
+                                />
+                                <button
+                                  onClick={() => updateItemQuantity(index, item.quantity + 0.5)}
+                                  className="w-8 h-8 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-bold"
+                                >
+                                  +
+                                </button>
+                                <span className="text-sm text-gray-600 ml-2">份</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                     
-                    {/* Nutrition Grid */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="stat-card from-green-50 to-emerald-50 border-green-100">
-                        <div className="text-sm text-green-700 font-medium mb-1">卡路里</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.calories}
-                            onChange={(e) => updateNutrition('calories', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-green-600 bg-transparent border-b-2 border-green-300 focus:outline-none focus:border-green-500"
-                          />
-                        ) : (
+                    {/* Total Nutrition Grid */}
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">總營養</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="stat-card from-green-50 to-emerald-50 border-green-100">
+                          <div className="text-sm text-green-700 font-medium mb-1">卡路里</div>
                           <div className="text-3xl font-bold text-green-600">{displayData.calories}</div>
-                        )}
-                        <div className="text-xs text-green-600 mt-1">kcal</div>
-                      </div>
-                      <div className="stat-card from-blue-50 to-cyan-50 border-blue-100">
-                        <div className="text-sm text-blue-700 font-medium mb-1">蛋白質</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.protein}
-                            onChange={(e) => updateNutrition('protein', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:outline-none focus:border-blue-500"
-                          />
-                        ) : (
+                          <div className="text-xs text-green-600 mt-1">kcal</div>
+                        </div>
+                        <div className="stat-card from-blue-50 to-cyan-50 border-blue-100">
+                          <div className="text-sm text-blue-700 font-medium mb-1">蛋白質</div>
                           <div className="text-3xl font-bold text-blue-600">{displayData.protein}</div>
-                        )}
-                        <div className="text-xs text-blue-600 mt-1">g</div>
-                      </div>
-                      <div className="stat-card from-orange-50 to-amber-50 border-orange-100">
-                        <div className="text-sm text-orange-700 font-medium mb-1">碳水</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.carbs}
-                            onChange={(e) => updateNutrition('carbs', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-orange-600 bg-transparent border-b-2 border-orange-300 focus:outline-none focus:border-orange-500"
-                          />
-                        ) : (
+                          <div className="text-xs text-blue-600 mt-1">g</div>
+                        </div>
+                        <div className="stat-card from-orange-50 to-amber-50 border-orange-100">
+                          <div className="text-sm text-orange-700 font-medium mb-1">碳水</div>
                           <div className="text-3xl font-bold text-orange-600">{displayData.carbs}</div>
-                        )}
-                        <div className="text-xs text-orange-600 mt-1">g</div>
-                      </div>
-                      <div className="stat-card from-red-50 to-rose-50 border-red-100">
-                        <div className="text-sm text-red-700 font-medium mb-1">脂肪</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.fat}
-                            onChange={(e) => updateNutrition('fat', parseInt(e.target.value) || 0)}
-                            className="w-full text-3xl font-bold text-red-600 bg-transparent border-b-2 border-red-300 focus:outline-none focus:border-red-500"
-                          />
-                        ) : (
+                          <div className="text-xs text-orange-600 mt-1">g</div>
+                        </div>
+                        <div className="stat-card from-red-50 to-rose-50 border-red-100">
+                          <div className="text-sm text-red-700 font-medium mb-1">脂肪</div>
                           <div className="text-3xl font-bold text-red-600">{displayData.fat}</div>
-                        )}
-                        <div className="text-xs text-red-600 mt-1">g</div>
+                          <div className="text-xs text-red-600 mt-1">g</div>
+                        </div>
                       </div>
                     </div>
 
@@ -421,52 +432,17 @@ export default function Home() {
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
                         <div className="text-xs text-purple-700 font-medium mb-1">纖維</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.fiber || 0}
-                            onChange={(e) => updateNutrition('fiber', parseInt(e.target.value) || 0)}
-                            className="w-full text-lg font-bold text-purple-600 bg-transparent border-b border-purple-300 focus:outline-none text-center"
-                          />
-                        ) : (
-                          <div className="text-lg font-bold text-purple-600">{displayData.fiber || 0}g</div>
-                        )}
+                        <div className="text-lg font-bold text-purple-600">{displayData.fiber || 0}g</div>
                       </div>
                       <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-center">
                         <div className="text-xs text-pink-700 font-medium mb-1">糖分</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.sugar || 0}
-                            onChange={(e) => updateNutrition('sugar', parseInt(e.target.value) || 0)}
-                            className="w-full text-lg font-bold text-pink-600 bg-transparent border-b border-pink-300 focus:outline-none text-center"
-                          />
-                        ) : (
-                          <div className="text-lg font-bold text-pink-600">{displayData.sugar || 0}g</div>
-                        )}
+                        <div className="text-lg font-bold text-pink-600">{displayData.sugar || 0}g</div>
                       </div>
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
                         <div className="text-xs text-gray-700 font-medium mb-1">鈉</div>
-                        {editing ? (
-                          <input
-                            type="number"
-                            value={displayData.sodium || 0}
-                            onChange={(e) => updateNutrition('sodium', parseInt(e.target.value) || 0)}
-                            className="w-full text-lg font-bold text-gray-600 bg-transparent border-b border-gray-300 focus:outline-none text-center"
-                          />
-                        ) : (
-                          <div className="text-lg font-bold text-gray-600">{displayData.sodium || 0}mg</div>
-                        )}
+                        <div className="text-lg font-bold text-gray-600">{displayData.sodium || 0}mg</div>
                       </div>
                     </div>
-
-                    {/* Serving Size Info */}
-                    {displayData.servingSize && (
-                      <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                        <div className="text-xs text-gray-600 mb-1">份量</div>
-                        <div className="text-sm font-semibold text-gray-800">{displayData.servingSize}</div>
-                      </div>
-                    )}
 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
