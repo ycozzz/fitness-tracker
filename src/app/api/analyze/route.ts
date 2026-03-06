@@ -52,27 +52,31 @@ export async function POST(req: NextRequest) {
   "items": [
     {
       "name": "食物1名稱（繁體中文）",
-      "calories": 卡路里數字,
-      "protein": 蛋白質克數,
-      "carbs": 碳水化合物克數,
-      "fat": 脂肪克數,
-      "fiber": 纖維克數,
-      "sugar": 糖分克數,
-      "sodium": 鈉毫克數,
+      "calories": 單份卡路里數字,
+      "protein": 單份蛋白質克數,
+      "carbs": 單份碳水化合物克數,
+      "fat": 單份脂肪克數,
+      "fiber": 單份纖維克數,
+      "sugar": 單份糖分克數,
+      "sodium": 單份鈉毫克數,
       "servingSize": "份量描述",
-      "quantity": 1
+      "quantity": 數量,
+      "unit": "單位（份/隻/碗/塊/件）",
+      "countable": true或false（是否可數，例如雞翼=true，飯=false）
     },
     {
       "name": "食物2名稱（繁體中文）",
-      "calories": 卡路里數字,
-      "protein": 蛋白質克數,
-      "carbs": 碳水化合物克數,
-      "fat": 脂肪克數,
-      "fiber": 纖維克數,
-      "sugar": 糖分克數,
-      "sodium": 鈉毫克數,
+      "calories": 單份卡路里數字,
+      "protein": 單份蛋白質克數,
+      "carbs": 單份碳水化合物克數,
+      "fat": 單份脂肪克數,
+      "fiber": 單份纖維克數,
+      "sugar": 單份糖分克數,
+      "sodium": 單份鈉毫克數,
       "servingSize": "份量描述",
-      "quantity": 1
+      "quantity": 數量,
+      "unit": "單位（份/隻/碗/塊/件）",
+      "countable": true或false
     }
   ],
   "calories": 總卡路里,
@@ -83,7 +87,8 @@ export async function POST(req: NextRequest) {
   "sugar": 總糖分,
   "sodium": 總鈉,
   "servingSize": "總份量描述",
-  "confidence": 信心度0-1
+  "confidence": 信心度0-1,
+  "aiComment": "用廣東話毒舌評論這餐（例如：嘩，成碟油，你今晚準備跑10K啦！）"
 }
 
 如果只有一種食物，請用以下格式：
@@ -92,15 +97,17 @@ export async function POST(req: NextRequest) {
   "items": [
     {
       "name": "食物名稱（繁體中文）",
-      "calories": 卡路里數字,
-      "protein": 蛋白質克數,
-      "carbs": 碳水化合物克數,
-      "fat": 脂肪克數,
-      "fiber": 纖維克數,
-      "sugar": 糖分克數,
-      "sodium": 鈉毫克數,
+      "calories": 單份卡路里數字,
+      "protein": 單份蛋白質克數,
+      "carbs": 單份碳水化合物克數,
+      "fat": 單份脂肪克數,
+      "fiber": 單份纖維克數,
+      "sugar": 單份糖分克數,
+      "sodium": 單份鈉毫克數,
       "servingSize": "份量描述",
-      "quantity": 1
+      "quantity": 數量,
+      "unit": "單位（份/隻/碗/塊/件）",
+      "countable": true或false
     }
   ],
   "calories": 卡路里數字,
@@ -111,8 +118,16 @@ export async function POST(req: NextRequest) {
   "sugar": 糖分克數,
   "sodium": 鈉毫克數,
   "servingSize": "份量描述",
-  "confidence": 信心度0-1
+  "confidence": 信心度0-1,
+  "aiComment": "用廣東話毒舌評論這餐"
 }
+
+重要規則：
+1. 如果是可數食物（雞翼、餃子、壽司等），設 countable=true，unit="隻"或"件"或"粒"
+2. 如果是不可數食物（飯、麵、湯等），設 countable=false，unit="份"或"碗"
+3. calories/protein等數值是「單份/單隻」的營養，不是總量
+4. quantity 是圖片中看到的數量（例如：3隻雞翼 → quantity=3）
+5. 廣東話評論要幽默、毒舌、貼地，根據食物健康程度給予不同評價
 
 請根據圖片中的食物估算營養成分。`
               }
@@ -132,6 +147,7 @@ export async function POST(req: NextRequest) {
           const analysis = JSON.parse(jsonMatch[0]);
           analysis.imagePath = `/uploads/${filename}`;
           console.log('✅ AI Analysis successful:', analysis.foodName);
+          console.log('💬 AI Comment:', analysis.aiComment);
           return NextResponse.json(analysis);
         }
       } else {
@@ -157,7 +173,9 @@ export async function POST(req: NextRequest) {
           sugar: 8,
           sodium: 400,
           servingSize: '1 份',
-          quantity: 1
+          quantity: 1,
+          unit: '份',
+          countable: false
         }
       ],
       calories: 350,
@@ -170,7 +188,8 @@ export async function POST(req: NextRequest) {
       servingSize: '1 份',
       confidence: 0.7,
       imagePath: `/uploads/${filename}`,
-      note: '⚠️ AI 服務暫時不可用，顯示模擬數據'
+      note: '⚠️ AI 服務暫時不可用，顯示模擬數據',
+      aiComment: '等陣先，AI 瞓緊覺，遲啲再嚟啦！'
     };
 
     return NextResponse.json(mockData);

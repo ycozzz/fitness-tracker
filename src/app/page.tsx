@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 interface FoodItem {
+  unit?: string;
+  countable?: boolean;
   name: string;
   calories: number;
   protein: number;
@@ -336,6 +338,11 @@ export default function Home() {
                             {displayData.note}
                           </div>
                         )}
+                        {displayData.aiComment && (
+                          <div className="mt-2 text-sm font-semibold text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 rounded-lg border-2 border-purple-200">
+                            💬 {displayData.aiComment}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Edit Button */}
@@ -388,7 +395,7 @@ export default function Home() {
                                   className="w-20 px-3 py-2 text-center border-2 border-blue-300 rounded-lg font-semibold text-blue-700 focus:outline-none focus:border-blue-500"
                                 />
                                 <button
-                                  onClick={() => updateItemQuantity(index, item.quantity + 0.5)}
+                                  onClick={() => updateItemQuantity(index, item.quantity + (item.countable ? 1 : 0.5))}
                                   className="w-8 h-8 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-bold"
                                 >
                                   +
